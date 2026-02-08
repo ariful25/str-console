@@ -1,0 +1,17 @@
+# Git Attributes for VPS Deployment Scripts
+# Ensure proper line endings for shell scripts
+
+# Shell scripts should always use LF line endings
+*.sh text eol=lf
+
+# JavaScript files use LF
+*.js text eol=lf
+
+# Environment files
+.env* text eol=lf
+
+# Documentation
+*.md text
+
+# Explicitly mark scripts as executable
+deploy/*.sh eol=lf

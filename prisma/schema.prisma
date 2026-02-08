@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approvals ApprovalRequest[]
+  sendLogs  SendLog[]
+  auditLogs AuditLog[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pmsAccounts PmsAccount[]
+  properties  Property[]
+  threads     Thread[]
+  templates   Template[]
+  autoRules   AutoRule[]
+  kbEntries   KbEntry[]
+
+  @@index([name])
+}
+
+model PmsAccount {
+  id         String   @id @default(cuid())
+  clientId   String
+  name       String
+  type       String   @default("HOSTAWAY")
+  externalId String
+  apiKey     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  properties Property[]
+
+  @@index([clientId])
+  @@index([externalId])
+}
+
+model Property {
+  id           String   @id @default(cuid())
+  clientId     String
+  pmsAccountId String
+  listingMapId String
+  name         String
+  address      String?
+  timezone     String   @default("UTC")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  pmsAccount PmsAccount @relation(fields: [pmsAccountId], references: [id], onDelete: Cascade)
+  threads    Thread[]
+  kbEntries  KbEntry[]
+  autoRules  AutoRule[]
+
+  @@index([clientId])
+  @@index([pmsAccountId])
+  @@index([listingMapId])
+}
+
+model Thread {
+  id             String    @id @default(cuid())
+  clientId       String
+  propertyId     String
+  guestName      String
+  guestEmail     String?
+  status         String    @default("pending")
+  lastReceivedAt DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  messages  Message[]
+  analyses  Analysis[]
+  sendLogs  SendLog[]
+
+  @@index([clientId, lastReceivedAt])
+  @@index([status])
+  @@index([propertyId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  threadId   String
+  senderType String
+  text       String   @db.Text
+  receivedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  thread   Thread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  analysis Analysis?
+  approval ApprovalRequest?
+  sendLogs SendLog[]
+
+  @@index([threadId, receivedAt])
+}
+
+model Analysis {
+  id              String    @id @default(cuid())
+  messageId       String    @unique
+  threadId        String
+  intent          String?
+  risk            String    @default("medium")
+  urgency         String    @default("normal")
+  threadSummary   String?   @db.Text
+  suggestedReply  String?   @db.Text
+  createdAt       DateTime  @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  thread  Thread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([risk])
+  @@index([intent])
+}
+
+model Template {
+  id        String   @id @default(cuid())
+  clientId  String?
+  intent    String
+  label     String
+  text      String   @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([intent])
+  @@index([clientId])
+}
+
+model ApprovalRequest {
+  id         String    @id @default(cuid())
+  messageId  String    @unique
+  status     String    @default("pending")
+  reviewerId String?
+  notes      String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  message  Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reviewer User?   @relation(fields: [reviewerId], references: [id])
+
+  @@index([status, createdAt])
+}
+
+model AutoRule {
+  id         String  @id @default(cuid())
+  clientId   String?
+  propertyId String?
+  intent     String?
+  riskMax    String  @default("low")
+  conditions Json?
+  action     String  @default("queue")
+  enabled    Boolean @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  client   Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([enabled])
+  @@index([clientId])
+  @@index([propertyId])
+  @@index([intent])
+}
+
+model SendLog {
+  id               String   @id @default(cuid())
+  messageId        String
+  threadId         String
+  finalReply       String   @db.Text
+  channel          String   @default("pms")
+  providerResponse Json?
+  sentByUserId     String?
+  createdAt        DateTime @default(now())
+
+  message      Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  thread       Thread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sentByUser   User?   @relation(fields: [sentByUserId], references: [id])
+
+  @@index([createdAt])
+  @@index([threadId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  meta        Json?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+model KbEntry {
+  id         String   @id @default(cuid())
+  clientId   String
+  propertyId String?
+  title      String
+  content    String   @db.Text
+  tags       String[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sources  KbSource[]
+
+  @@index([clientId])
+  @@index([propertyId])
+}
+
+model KbSource {
+  id        String   @id @default(cuid())
+  kbEntryId String
+  type      String
+  ref       String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  kbEntry KbEntry @relation(fields: [kbEntryId], references: [id], onDelete: Cascade)
+
+  @@index([kbEntryId])
+}
