@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@clerk/nextjs'
+import { auth } from '@clerk/nextjs/server'
 import type { ApiResponse } from '@/lib/types'
 
 export async function POST(
